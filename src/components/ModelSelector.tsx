@@ -18,21 +18,21 @@ export default function ModelSelector({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const response = await fetch("/api/models");
+        const data = await response.json();
+        setModels(data.models);
+        setProviders(["All", ...data.providers]);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching models:", error);
+        setLoading(false);
+      }
+    };
+
     fetchModels();
   }, []);
-
-  const fetchModels = async () => {
-    try {
-      const response = await fetch("/api/models");
-      const data = await response.json();
-      setModels(data.models);
-      setProviders(["All", ...data.providers]);
-      setLoading(false);
-    } catch (error) {
-      console.error("Error fetching models:", error);
-      setLoading(false);
-    }
-  };
 
   const filteredModels =
     selectedProvider === "All"

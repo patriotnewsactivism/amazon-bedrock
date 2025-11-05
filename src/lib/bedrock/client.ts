@@ -12,6 +12,12 @@ export interface BedrockConfig {
   };
 }
 
+export interface ModelInvokeParams {
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+}
+
 export class BedrockClient {
   private client: BedrockRuntimeClient;
 
@@ -25,7 +31,7 @@ export class BedrockClient {
     });
   }
 
-  async invokeModel(modelId: string, prompt: string, params?: any) {
+  async invokeModel(modelId: string, prompt: string, params?: ModelInvokeParams) {
     const body = this.formatRequestBody(modelId, prompt, params);
 
     const command = new InvokeModelCommand({
@@ -48,7 +54,7 @@ export class BedrockClient {
   async invokeModelStream(
     modelId: string,
     prompt: string,
-    params?: any,
+    params?: ModelInvokeParams,
     onChunk?: (text: string) => void
   ) {
     const body = this.formatRequestBody(modelId, prompt, params);
@@ -86,7 +92,7 @@ export class BedrockClient {
     }
   }
 
-  private formatRequestBody(modelId: string, prompt: string, params?: any) {
+  private formatRequestBody(modelId: string, prompt: string, params?: ModelInvokeParams) {
     // Claude models (Anthropic)
     if (modelId.includes("anthropic.claude")) {
       return {
@@ -160,11 +166,12 @@ export class BedrockClient {
     };
   }
 
-  private formatResponse(modelId: string, responseBody: any) {
+  private formatResponse(modelId: string, responseBody: Record<string, unknown>) {
     // Claude models
     if (modelId.includes("anthropic.claude")) {
+      const content = responseBody.content as Array<{ text: string }> | undefined;
       return {
-        text: responseBody.content?.[0]?.text || "",
+        text: content?.[0]?.text || "",
         raw: responseBody,
       };
     }
@@ -172,74 +179,80 @@ export class BedrockClient {
     // Llama models
     if (modelId.includes("meta.llama")) {
       return {
-        text: responseBody.generation || "",
+        text: (responseBody.generation as string) || "",
         raw: responseBody,
       };
     }
 
     // Titan models
     if (modelId.includes("amazon.titan")) {
+      const results = responseBody.results as Array<{ outputText: string }> | undefined;
       return {
-        text: responseBody.results?.[0]?.outputText || "",
+        text: results?.[0]?.outputText || "",
         raw: responseBody,
       };
     }
 
     // Mistral models
     if (modelId.includes("mistral")) {
+      const outputs = responseBody.outputs as Array<{ text: string }> | undefined;
       return {
-        text: responseBody.outputs?.[0]?.text || "",
+        text: outputs?.[0]?.text || "",
         raw: responseBody,
       };
     }
 
     // Cohere models
     if (modelId.includes("cohere")) {
+      const generations = responseBody.generations as Array<{ text: string }> | undefined;
       return {
-        text: responseBody.generations?.[0]?.text || "",
+        text: generations?.[0]?.text || "",
         raw: responseBody,
       };
     }
 
     // AI21 models
     if (modelId.includes("ai21")) {
+      const completions = responseBody.completions as Array<{ data: { text: string } }> | undefined;
       return {
-        text: responseBody.completions?.[0]?.data?.text || "",
+        text: completions?.[0]?.data?.text || "",
         raw: responseBody,
       };
     }
 
     return {
-      text: responseBody.completion || responseBody.text || "",
+      text: (responseBody.completion as string) || (responseBody.text as string) || "",
       raw: responseBody,
     };
   }
 
-  private extractTextFromChunk(modelId: string, chunkData: any): string {
+  private extractTextFromChunk(modelId: string, chunkData: Record<string, unknown>): string {
     // Claude models
     if (modelId.includes("anthropic.claude")) {
       if (chunkData.type === "content_block_delta") {
-        return chunkData.delta?.text || "";
+        const delta = chunkData.delta as { text?: string } | undefined;
+        return delta?.text || "";
       }
       return "";
     }
 
     // Llama models
     if (modelId.includes("meta.llama")) {
-      return chunkData.generation || "";
+      return (chunkData.generation as string) || "";
     }
 
     // Titan models
     if (modelId.includes("amazon.titan")) {
-      return chunkData.outputText || "";
+      return (chunkData.outputText as string) || "";
     }
 
     // Mistral models
     if (modelId.includes("mistral")) {
-      return chunkData.outputs?.[0]?.text || "";
+      const outputs = chunkData.outputs as Array<{ text: string }> | undefined;
+      return outputs?.[0]?.text || "";
     }
 
-    return chunkData.text || chunkData.completion || "";
+    return (chunkData.text as string) || (chunkData.completion as string) || "";
   }
 }
 

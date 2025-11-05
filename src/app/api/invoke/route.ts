@@ -48,10 +48,11 @@ export async function POST(request: NextRequest) {
       const response = await bedrockClient.invokeModel(modelId, prompt, params);
       return NextResponse.json(response);
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error invoking model:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to invoke model";
     return NextResponse.json(
-      { error: error.message || "Failed to invoke model" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

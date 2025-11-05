@@ -7,14 +7,12 @@ interface ChatInterfaceProps {
   modelId: string;
   systemPrompt?: string;
   placeholder?: string;
-  title?: string;
 }
 
 export default function ChatInterface({
   modelId,
   systemPrompt,
   placeholder = "Type your message...",
-  title = "Chat",
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
