@@ -1,5 +1,35 @@
 {
+  "name": "amazon-bedrock-ai-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multi-provider AI chat application with Amazon Bedrock, OpenAI, and Anthropic support",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
   "dependencies": {
-    "aws": "^0.0.3-2"
+    "@anthropic-ai/sdk": "^0.27.3",
+    "@aws-sdk/client-bedrock-runtime": "^3.658.1",
+    "next": "^14.2.13",
+    "openai": "^4.63.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "@types/react": "^18.3.9",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.13",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
