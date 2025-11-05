@@ -1,12 +1,29 @@
 # AWS Bedrock AI Platform
 
-A comprehensive Next.js application that provides access to all AWS Bedrock AI models with specialized interfaces for various use cases.
+The most comprehensive AWS Bedrock platform with every advanced feature you could want! Access 25+ AI models with streaming responses, cost tracking, model comparison, workflows, RAG, and much more.
 
-## Features
+## 🚀 All Features Included
+
+### Core Features
+- ⚡ **Real-time Streaming** - See responses as they generate
+- 💾 **Conversation History** - Save, search, and manage all conversations
+- 🔄 **Model Comparison** - Compare responses from different models side-by-side
+- 🎛️ **Advanced Parameters** - Control temperature, tokens, top-p, and more
+- 💰 **Cost Tracking** - Real-time usage and cost monitoring
+- 📎 **File Upload** - Upload and analyze code, documents, and more
+- 🌙 **Dark Mode** - Beautiful dark theme with persistence
+- 📥 **Export** - Export conversations as Markdown, JSON, or TXT
+- 🔗 **Multi-Agent Workflows** - Chain agents together for complex tasks
+- 🧠 **RAG** - Upload documents to create knowledge bases
+- ⌨️ **Keyboard Shortcuts** - Ctrl+Enter to send messages
+- 🎨 **Markdown Rendering** - Beautiful markdown with code syntax highlighting
+- 📋 **Copy Buttons** - One-click copy for all messages
+- 📱 **Responsive Design** - Works perfectly on mobile, tablet, and desktop
+- ⚠️ **Error Handling** - Comprehensive error messages and retry logic
 
 ### 🤖 25+ AI Models
 Access models from leading providers:
-- **Anthropic Claude** (3.5 Sonnet v2, Opus, Haiku)
+- **Anthropic Claude** (3.5 Sonnet v2, Opus, Sonnet, Haiku)
 - **Meta Llama** (3.2 90B, 3.1 405B, 70B, 8B)
 - **Amazon Titan** (Premier, Express, Lite)
 - **Mistral AI** (Large 2, Small, Mixtral)
@@ -14,48 +31,62 @@ Access models from leading providers:
 - **AI21 Labs** (Jamba, Jurassic-2)
 
 ### 💻 Autonomous Coding Agents
-- Code Generator
-- Code Review & Debug
-- Architecture Design
-- Test Generator
+- 🔧 Code Generator with file upload
+- 🔍 Code Review & Debug with file upload
+- 🏗️ Architecture Design
+- 🧪 Test Generator
 
 ### 📝 Article Composition
-- Blog Writer
-- Technical Writer
-- News Writer
-- Content Editor
+- ✍️ Blog Writer
+- 📚 Technical Writer
+- 📰 News Writer
+- ✏️ Content Editor
 
 ### 🔍 Research Tools
-- Research Assistant
-- Data Analyst
-- Market Research
-- Academic Research
+- 🔬 Research Assistant
+- 📊 Data Analyst
+- 📈 Market Research
+- 🎓 Academic Research
 
 ### ⚖️ Legal Document Assistant
-- Contract Drafter
-- Legal Reviewer
-- Terms & Conditions Generator
-- NDA Generator
+- 📄 Contract Drafter
+- 🔍 Legal Reviewer
+- 📋 Terms & Conditions Generator
+- 🤐 NDA Generator
 
 ### 👥 AI Employees & Autonomous Agents
-- Customer Support Agent
-- Sales Assistant
-- Project Manager
-- HR Assistant
-- Marketing Specialist
-- Executive Assistant
+- 🎧 Customer Support Agent
+- 💼 Sales Assistant
+- 📅 Project Manager
+- 👔 HR Assistant
+- 📢 Marketing Specialist
+- 📧 Executive Assistant
 
 ### 💬 Chatbot Builder
-- Custom Chatbot Creator
-- E-commerce Bot
-- Educational Bot
-- Entertainment Bot
+- 🛍️ E-commerce Bot
+- 📚 Educational Bot
+- 🎮 Entertainment Bot
+- ⚙️ Support Bot
 
 ### 🌐 Website Builder
-- Landing Page Builder
-- Component Generator
-- Full Website Builder
-- UI/UX Designer
+- 🚀 Landing Page Builder
+- 🧩 Component Generator
+- 🌐 Full Website Builder
+- 🎨 UI/UX Designer
+
+### 🔄 Model Comparison
+Compare responses from two models simultaneously to find the best one for your needs
+
+### 🔗 Multi-Agent Workflows
+Pre-built workflows:
+- Research → Write → Edit
+- Code → Test → Review
+- Outline → Draft → Refine
+
+### 🧠 RAG (Retrieval Augmented Generation)
+- Upload documents (PDF, TXT, MD, etc.)
+- AI uses your documents as context
+- Get accurate, sourced answers
 
 ## Setup
 
