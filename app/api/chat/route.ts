@@ -19,35 +19,208 @@ interface ChatRequest {
   max_tokens?: number;
 }
 
+type BedrockModelFamily = "anthropic" | "meta" | "mistral" | "cohere" | "unknown";
+
+function getBedrockModelFamily(modelId: string): BedrockModelFamily {
+  if (modelId.startsWith("anthropic.")) return "anthropic";
+  if (modelId.startsWith("meta.")) return "meta";
+  if (modelId.startsWith("mistral.")) return "mistral";
+  if (modelId.startsWith("cohere.")) return "cohere";
+  return "unknown";
+}
+
+function buildMetaPrompt(conversation: Message[], systemMessage?: string) {
+  const segments: string[] = ["<|begin_of_text|>"];
+
+  if (systemMessage) {
+    segments.push(`<|start_header_id|>system<|end_header_id|>\n${systemMessage}<|eot_id|>`);
+  }
+
+  for (const message of conversation) {
+    const headerRole = message.role === "assistant" ? "assistant" : "user";
+    segments.push(
+      `<|start_header_id|>${headerRole}<|end_header_id|>\n${message.content}<|eot_id|>`
+    );
+  }
+
+  segments.push(`<|start_header_id|>assistant<|end_header_id|>\n`);
+
+  return segments.join("");
+}
+
+function buildBedrockBody(
+  family: BedrockModelFamily,
+  messages: Message[],
+  temperature?: number,
+  max_tokens?: number
+) {
+  const systemMessage = messages.find(m => m.role === "system")?.content;
+  const conversation = messages.filter(m => m.role !== "system");
+
+  switch (family) {
+    case "anthropic": {
+      const anthropicMessages = conversation.map(m => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const body: Record<string, unknown> = {
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: max_tokens || 4096,
+        temperature: temperature ?? 0.7,
+        messages: anthropicMessages,
+      };
+
+      if (systemMessage) {
+        body.system = systemMessage;
+      }
+
+      return body;
+    }
+    case "meta": {
+      const prompt = buildMetaPrompt(conversation, systemMessage);
+      return {
+        prompt,
+        temperature: temperature ?? 0.7,
+        top_p: 0.9,
+        max_gen_len: max_tokens || 1024,
+      };
+    }
+    case "mistral": {
+      const mistralMessages = [] as { role: string; content: string }[];
+      if (systemMessage) {
+        mistralMessages.push({ role: "system", content: systemMessage });
+      }
+      for (const message of conversation) {
+        mistralMessages.push({ role: message.role, content: message.content });
+      }
+      return {
+        messages: mistralMessages,
+        max_tokens: max_tokens || 4096,
+        temperature: temperature ?? 0.7,
+        top_p: 0.9,
+      };
+    }
+    case "cohere": {
+      const chatHistory = [] as { role: string; message: string }[];
+      const history = conversation.slice(0, -1);
+      for (const item of history) {
+        chatHistory.push({
+          role: item.role === "assistant" ? "CHATBOT" : "USER",
+          message: item.content,
+        });
+      }
+
+      const latest = conversation[conversation.length - 1];
+      const body: Record<string, unknown> = {
+        message: latest?.content || "",
+        chat_history: chatHistory,
+        temperature: temperature ?? 0.7,
+        max_tokens: max_tokens || 4096,
+      };
+
+      if (systemMessage) {
+        body.preamble = systemMessage;
+      }
+
+      return body;
+    }
+    default: {
+      return {
+        inputText: conversation.map(m => `${m.role}: ${m.content}`).join("\n"),
+        temperature: temperature ?? 0.7,
+        maxTokens: max_tokens || 4096,
+      };
+    }
+  }
+}
+
+function extractTextDelta(chunk: any): string | undefined {
+  if (!chunk || typeof chunk !== "object") {
+    return undefined;
+  }
+
+  if (typeof chunk.generation === "string" && chunk.generation) {
+    return chunk.generation;
+  }
+
+  if (typeof chunk.text === "string" && chunk.text) {
+    return chunk.text;
+  }
+
+  if (typeof chunk.delta === "string" && chunk.delta) {
+    return chunk.delta;
+  }
+
+  if (chunk.delta?.text) {
+    return chunk.delta.text;
+  }
+
+  if (chunk.delta?.type === "text_delta" && chunk.delta?.text) {
+    return chunk.delta.text;
+  }
+
+  if (Array.isArray(chunk.outputs)) {
+    const textFromOutputs = chunk.outputs
+      .map((item: any) => item?.content || item?.text)
+      .filter((value: unknown): value is string => typeof value === "string");
+    if (textFromOutputs.length > 0) {
+      return textFromOutputs.join("");
+    }
+  }
+
+  if (chunk.type === "text-generation" && typeof chunk?.text === "string") {
+    return chunk.text;
+  }
+
+  if (chunk.message?.content && Array.isArray(chunk.message.content)) {
+    const textPieces = chunk.message.content
+      .map((part: any) => part?.text)
+      .filter((value: unknown): value is string => typeof value === "string");
+    if (textPieces.length > 0) {
+      return textPieces.join("");
+    }
+  }
+
+  return undefined;
+}
+
+function shouldEndStream(chunk: any): boolean {
+  if (!chunk || typeof chunk !== "object") {
+    return false;
+  }
+
+  if (chunk.type === "message_stop" || chunk.type === "stream_end") {
+    return true;
+  }
+
+  if (typeof chunk.stop_reason === "string" && chunk.stop_reason) {
+    return true;
+  }
+
+  if (chunk.type === "output_text" && chunk.stop_reason) {
+    return true;
+  }
+
+  if (chunk.event_type === "message_end") {
+    return true;
+  }
+
+  return false;
+}
+
 async function handleBedrock(messages: Message[], model?: string, temperature?: number, max_tokens?: number) {
   const client = new BedrockRuntimeClient({
     region: process.env.AWS_REGION || "us-east-1",
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    }
+    },
   });
 
   const modelId = model || process.env.BEDROCK_MODEL || "anthropic.claude-3-5-sonnet-20241022-v2:0";
-
-  // Convert messages to Anthropic format (Bedrock Claude models use Anthropic format)
-  const anthropicMessages = messages.filter(m => m.role !== "system").map(m => ({
-    role: m.role,
-    content: m.content,
-  }));
-
-  const systemMessage = messages.find(m => m.role === "system")?.content;
-
-  const body: any = {
-    anthropic_version: "bedrock-2023-05-31",
-    max_tokens: max_tokens || 4096,
-    temperature: temperature ?? 0.7,
-    messages: anthropicMessages,
-  };
-
-  if (systemMessage) {
-    body.system = systemMessage;
-  }
+  const family = getBedrockModelFamily(modelId);
+  const body = buildBedrockBody(family, messages, temperature, max_tokens);
 
   const command = new InvokeModelWithResponseStreamCommand({
     modelId,
@@ -59,6 +232,7 @@ async function handleBedrock(messages: Message[], model?: string, temperature?: 
   const response = await client.send(command);
 
   const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
   const stream = new ReadableStream({
     async start(controller) {
       try {
@@ -67,14 +241,30 @@ async function handleBedrock(messages: Message[], model?: string, temperature?: 
         }
 
         for await (const event of response.body) {
-          if (event.chunk?.bytes) {
-            const chunk = JSON.parse(new TextDecoder().decode(event.chunk.bytes));
+          if (!event.chunk?.bytes) {
+            continue;
+          }
 
-            if (chunk.type === "content_block_delta" && chunk.delta?.text) {
-              controller.enqueue(encoder.encode(chunk.delta.text));
-            } else if (chunk.type === "message_stop") {
-              break;
-            }
+          const raw = decoder.decode(event.chunk.bytes);
+          if (!raw.trim()) {
+            continue;
+          }
+
+          let chunk: any;
+          try {
+            chunk = JSON.parse(raw);
+          } catch (parseError) {
+            console.warn("Unable to parse Bedrock chunk", parseError);
+            continue;
+          }
+
+          const textDelta = extractTextDelta(chunk);
+          if (textDelta) {
+            controller.enqueue(encoder.encode(textDelta));
+          }
+
+          if (shouldEndStream(chunk)) {
+            break;
           }
         }
       } catch (error) {
