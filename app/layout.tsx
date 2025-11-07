@@ -1,21 +1,19 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "Multi-AI Chat - Bedrock, OpenAI, Anthropic",
-  description: "Chat with multiple AI providers including Amazon Bedrock, OpenAI, and Anthropic Claude",
+  title: 'Bedrock Chat (Edge)',
+  description: 'Minimal Amazon Bedrock chat UI running on a Next.js Edge route.'
 };
 
 export default function RootLayout({
-  children,
+  children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
