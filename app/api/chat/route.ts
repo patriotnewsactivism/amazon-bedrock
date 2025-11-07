@@ -19,6 +19,14 @@ interface ChatRequest {
   max_tokens?: number;
 }
 
+interface BedrockRequestBody {
+  anthropic_version: string;
+  max_tokens: number;
+  temperature: number;
+  messages: Array<{ role: string; content: string }>;
+  system?: string;
+}
+
 async function handleBedrock(messages: Message[], model?: string, temperature?: number, max_tokens?: number) {
   const client = new BedrockRuntimeClient({
     region: process.env.AWS_REGION || "us-east-1",
@@ -38,16 +46,13 @@ async function handleBedrock(messages: Message[], model?: string, temperature?: 
 
   const systemMessage = messages.find(m => m.role === "system")?.content;
 
-  const body: any = {
+  const body: BedrockRequestBody = {
     anthropic_version: "bedrock-2023-05-31",
     max_tokens: max_tokens || 4096,
     temperature: temperature ?? 0.7,
     messages: anthropicMessages,
+    ...(systemMessage && { system: systemMessage }),
   };
-
-  if (systemMessage) {
-    body.system = systemMessage;
-  }
 
   const command = new InvokeModelWithResponseStreamCommand({
     modelId,
