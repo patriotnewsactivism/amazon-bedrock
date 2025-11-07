@@ -1,15 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '2mb',
-    },
-  },
-  env: {
-    NEXT_PUBLIC_APP_NAME: 'Multi-AI Chat',
-  },
-}
+  experimental: { webpackMemoryOptimizations: true }
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

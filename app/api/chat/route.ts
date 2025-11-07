@@ -1,233 +1,90 @@
-import { NextRequest, NextResponse } from "next/server";
-import { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } from "@aws-sdk/client-bedrock-runtime";
-import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
+export const runtime = 'edge';
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+import { AwsClient } from 'aws4fetch';
 
-interface Message {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
+const MODEL_ID = process.env.MODEL_ID ?? 'anthropic.claude-3-5-sonnet-20240620-v1:0';
+const BEDROCK_REGION =
+  process.env.BEDROCK_REGION ?? process.env.AWS_REGION ?? 'us-east-1';
+const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
+const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+const AWS_SESSION_TOKEN = process.env.AWS_SESSION_TOKEN; // optional
 
-interface ChatRequest {
-  messages: Message[];
-  provider?: "bedrock" | "openai" | "anthropic";
-  model?: string;
-  temperature?: number;
-  max_tokens?: number;
-}
+// Why: Bedrock Runtime requires SigV4 with service name "bedrock" even on bedrock-runtime endpoint.
+const aws = new AwsClient({
+  accessKeyId: AWS_ACCESS_KEY_ID!,
+  secretAccessKey: AWS_SECRET_ACCESS_KEY!,
+  sessionToken: AWS_SESSION_TOKEN,
+  region: BEDROCK_REGION,
+  service: 'bedrock'
+});
 
-async function handleBedrock(messages: Message[], model?: string, temperature?: number, max_tokens?: number) {
-  const client = new BedrockRuntimeClient({
-    region: process.env.AWS_REGION || "us-east-1",
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    }
-  });
-
-  const modelId = model || process.env.BEDROCK_MODEL || "anthropic.claude-3-5-sonnet-20241022-v2:0";
-
-  // Convert messages to Anthropic format (Bedrock Claude models use Anthropic format)
-  const anthropicMessages = messages.filter(m => m.role !== "system").map(m => ({
-    role: m.role,
-    content: m.content,
-  }));
-
-  const systemMessage = messages.find(m => m.role === "system")?.content;
-
-  const body: any = {
-    anthropic_version: "bedrock-2023-05-31",
-    max_tokens: max_tokens || 4096,
-    temperature: temperature ?? 0.7,
-    messages: anthropicMessages,
-  };
-
-  if (systemMessage) {
-    body.system = systemMessage;
-  }
-
-  const command = new InvokeModelWithResponseStreamCommand({
-    modelId,
-    contentType: "application/json",
-    accept: "application/json",
-    body: JSON.stringify(body),
-  });
-
-  const response = await client.send(command);
-
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        if (!response.body) {
-          throw new Error("No response body");
-        }
-
-        for await (const event of response.body) {
-          if (event.chunk?.bytes) {
-            const chunk = JSON.parse(new TextDecoder().decode(event.chunk.bytes));
-
-            if (chunk.type === "content_block_delta" && chunk.delta?.text) {
-              controller.enqueue(encoder.encode(chunk.delta.text));
-            } else if (chunk.type === "message_stop") {
-              break;
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Bedrock streaming error:", error);
-        controller.error(error);
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-    },
+function json(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' }
   });
 }
 
-async function handleOpenAI(messages: Message[], model?: string, temperature?: number, max_tokens?: number) {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OpenAI API key not configured");
-  }
-
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-
-  const stream = await openai.chat.completions.create({
-    model: model || "gpt-4o",
-    messages: messages as any,
-    temperature: temperature ?? 0.7,
-    max_tokens: max_tokens || 4096,
-    stream: true,
-  });
-
-  const encoder = new TextEncoder();
-  const readableStream = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const chunk of stream) {
-          const content = chunk.choices[0]?.delta?.content;
-          if (content) {
-            controller.enqueue(encoder.encode(content));
-          }
-        }
-      } catch (error) {
-        console.error("OpenAI streaming error:", error);
-        controller.error(error);
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(readableStream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-    },
-  });
-}
-
-async function handleAnthropic(messages: Message[], model?: string, temperature?: number, max_tokens?: number) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("Anthropic API key not configured");
-  }
-
-  const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
-
-  const systemMessage = messages.find(m => m.role === "system")?.content;
-  const anthropicMessages = messages.filter(m => m.role !== "system").map(m => ({
-    role: m.role,
-    content: m.content,
-  }));
-
-  const stream = await anthropic.messages.stream({
-    model: model || "claude-3-5-sonnet-20241022",
-    max_tokens: max_tokens || 4096,
-    temperature: temperature ?? 0.7,
-    messages: anthropicMessages as any,
-    ...(systemMessage && { system: systemMessage }),
-  });
-
-  const encoder = new TextEncoder();
-  const readableStream = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const chunk of stream) {
-          if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
-            controller.enqueue(encoder.encode(chunk.delta.text));
-          }
-        }
-      } catch (error) {
-        console.error("Anthropic streaming error:", error);
-        controller.error(error);
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(readableStream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-    },
-  });
-}
-
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const body: ChatRequest = await req.json();
-    const { messages, provider = "bedrock", model, temperature, max_tokens } = body;
-
-    if (!messages || messages.length === 0) {
-      return NextResponse.json(
-        { error: "Messages are required" },
-        { status: 400 }
-      );
+    if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+      return json(500, { error: 'AWS credentials not configured on server.' });
     }
 
-    switch (provider) {
-      case "bedrock":
-        return await handleBedrock(messages, model, temperature, max_tokens);
-      case "openai":
-        return await handleOpenAI(messages, model, temperature, max_tokens);
-      case "anthropic":
-        return await handleAnthropic(messages, model, temperature, max_tokens);
-      default:
-        return NextResponse.json(
-          { error: `Unsupported provider: ${provider}` },
-          { status: 400 }
-        );
+    const input = await req.json().catch(() => ({}));
+    let messages = input?.messages as
+      | Array<{ role: 'user' | 'assistant' | 'system'; content: Array<{ type: 'text'; text: string }> }>
+      | undefined;
+
+    if (!messages) {
+      const prompt = String(input?.prompt ?? '');
+      messages = [{ role: 'user', content: [{ type: 'text', text: prompt }] }];
     }
-  } catch (error) {
-    console.error("Chat API error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
-      { status: 500 }
-    );
+
+    const max_tokens = Number(input?.max_tokens ?? 512);
+    const temperature = Number(input?.temperature ?? 0.7);
+
+    const body = {
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens,
+      temperature,
+      messages
+    };
+
+    const url = `https://bedrock-runtime.${BEDROCK_REGION}.amazonaws.com/model/${encodeURIComponent(
+      MODEL_ID
+    )}/invoke`;
+
+    const resp = await aws.fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      return json(resp.status, {
+        error: `Bedrock error ${resp.status}`,
+        detail: errText
+      });
+    }
+
+    const raw = await resp.json();
+    let text = '';
+    for (const c of raw?.content ?? []) {
+      if (c?.type === 'text' && typeof c.text === 'string') text += c.text;
+    }
+
+    return json(200, {
+      model: MODEL_ID,
+      region: BEDROCK_REGION,
+      output: text,
+      raw
+    });
+  } catch (e: any) {
+    return json(500, { error: `${e?.name ?? 'Error'}: ${e?.message ?? String(e)}` });
   }
-}
-
-export async function GET() {
-  return NextResponse.json({
-    status: "ok",
-    providers: ["bedrock", "openai", "anthropic"],
-    message: "Multi-provider AI Chat API",
-  });
 }
