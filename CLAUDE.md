@@ -107,8 +107,10 @@ Content-Type: application/json
 **Response Format:**
 ```json
 {
-  "response": "I'm doing well, thank you for asking!",
-  "modelId": "anthropic.claude-3-5-sonnet-20240620-v1:0"
+  "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+  "region": "us-east-1",
+  "output": "I'm doing well, thank you for asking!",
+  "raw": { /* full Bedrock API response */ }
 }
 ```
 
@@ -123,10 +125,16 @@ Currently hardcoded to use Claude 3.5 Sonnet but can be changed via `MODEL_ID` e
 ```typescript
 {
   anthropic_version: "bedrock-2023-05-31",
-  max_tokens: 2048,
+  max_tokens: 512,      // configurable via request body
+  temperature: 0.7,     // configurable via request body
   messages: [{ role: "user", content: [{ type: "text", text: prompt }] }]
 }
 ```
+
+**Additional Request Parameters:**
+The API accepts optional parameters in the request body:
+- `max_tokens` (number, default: 512) - Maximum tokens in response
+- `temperature` (number, default: 0.7) - Sampling temperature
 
 **Important:** This implementation is Claude-specific. To support other model providers (Llama, Titan, Mistral, etc.), you'll need to add request body formatting logic for each provider's schema.
 
@@ -143,10 +151,10 @@ Currently hardcoded to use Claude 3.5 Sonnet but can be changed via `MODEL_ID` e
 
 **State Management:**
 ```typescript
-const [prompt, setPrompt] = useState('')
-const [response, setResponse] = useState('')
-const [loading, setLoading] = useState(false)
-const [error, setError] = useState('')
+const [input, setInput] = useState('')       // User input text
+const [out, setOut] = useState<string>('')   // AI response output
+const [busy, setBusy] = useState(false)      // Loading state
+const [err, setErr] = useState<string | null>(null)  // Error message
 ```
 
 **Styling Approach:**
@@ -157,32 +165,42 @@ const [error, setError] = useState('')
 
 #### Python CLI Tool (app/bedrock_cli.py)
 
-A standalone command-line interface for AWS Bedrock that uses boto3.
+A standalone command-line interface for AWS Bedrock that uses boto3 and the Converse API for provider-agnostic model invocation.
 
 **Features:**
-- Streaming and non-streaming inference
-- Converse API (provider-agnostic)
+- Streaming and non-streaming inference via Converse/ConverseStream API
+- Provider-agnostic: works across Claude, Llama, Titan, Mistral models
 - Environment diagnostics with `--doctor` flag
-- Colored output for better readability
-- Comprehensive error handling with hints
+- Comprehensive error handling with actionable hints
+- Configurable parameters: max-tokens, temperature, top-p
 
 **Usage:**
 ```bash
-# Basic usage
-python app/bedrock_cli.py "What is the capital of France?"
+# Basic usage (requires --model-id and --prompt)
+python app/bedrock_cli.py --model-id anthropic.claude-3-5-sonnet-20241022-v2:0 --prompt "What is the capital of France?"
 
 # Streaming mode
-python app/bedrock_cli.py "Tell me a story" --stream
+python app/bedrock_cli.py --model-id anthropic.claude-3-5-sonnet-20241022-v2:0 --prompt "Tell me a story" --stream
 
-# Specify model
-python app/bedrock_cli.py "Hello" --model-id anthropic.claude-3-haiku-20240307-v1:0
+# With region and custom parameters
+python app/bedrock_cli.py --model-id meta.llama3-70b-instruct-v1:0 --prompt "Explain DNS." --region us-west-2 --max-tokens 400
 
 # Environment check
 python app/bedrock_cli.py --doctor
 ```
 
+**CLI Arguments:**
+- `--model-id` (required): Bedrock model ID (e.g., `anthropic.claude-3-5-sonnet-20241022-v2:0`)
+- `--prompt` (required): User prompt text
+- `--region` (optional): AWS region (defaults to boto3 config)
+- `--max-tokens` (optional, default: 512): Maximum response tokens
+- `--temperature` (optional, default: 0.2): Sampling temperature
+- `--top-p` (optional, default: 0.9): Top-p sampling parameter
+- `--stream` (optional): Enable streaming output
+- `--doctor` (optional): Run environment diagnostics
+
 **Requirements:**
-- boto3
+- boto3 and botocore
 - AWS credentials configured (env vars or ~/.aws/credentials)
 - Bedrock model access enabled in AWS Console
 
@@ -341,7 +359,12 @@ curl -X POST http://localhost:3000/api/chat \
   -d '{"prompt": "Hello, who are you?"}'
 
 # Expected response
-{"response":"I am Claude...","modelId":"anthropic.claude-3-5-sonnet-20240620-v1:0"}
+{"model":"anthropic.claude-3-5-sonnet-20240620-v1:0","region":"us-east-1","output":"I am Claude...","raw":{...}}
+
+# With custom parameters
+curl -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Hello", "max_tokens": 1024, "temperature": 0.5}'
 ```
 
 **Test the UI:**
@@ -355,8 +378,8 @@ curl -X POST http://localhost:3000/api/chat \
 # Environment check
 python app/bedrock_cli.py --doctor
 
-# Simple query
-python app/bedrock_cli.py "What is 2+2?"
+# Simple query (requires both --model-id and --prompt)
+python app/bedrock_cli.py --model-id anthropic.claude-3-5-sonnet-20241022-v2:0 --prompt "What is 2+2?"
 ```
 
 ### Common Issues
@@ -495,14 +518,17 @@ const body = MODEL_FORMATS[provider](prompt)
 ## AWS Bedrock Model IDs
 
 **Common Models:**
-- `anthropic.claude-3-5-sonnet-20240620-v1:0` - Claude 3.5 Sonnet (current default)
+- `anthropic.claude-3-5-sonnet-20240620-v1:0` - Claude 3.5 Sonnet v1 (current default in edge API)
+- `anthropic.claude-3-5-sonnet-20241022-v2:0` - Claude 3.5 Sonnet v2 (recommended for CLI)
 - `anthropic.claude-3-haiku-20240307-v1:0` - Claude 3 Haiku (faster, cheaper)
 - `anthropic.claude-3-opus-20240229-v1:0` - Claude 3 Opus (most capable)
 - `meta.llama3-70b-instruct-v1:0` - Llama 3 70B
 - `amazon.titan-text-express-v1` - Titan Text Express
 - `mistral.mistral-7b-instruct-v0:2` - Mistral 7B
 
-**Note:** Different models require different request/response formats. Current implementation only supports Claude models.
+**Note:**
+- The edge API route (`/api/chat`) only supports Claude models due to hardcoded request format.
+- The Python CLI uses the Converse API, which works across all providers without format changes.
 
 ## Useful Resources
 
