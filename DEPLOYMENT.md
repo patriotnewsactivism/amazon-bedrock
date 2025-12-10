@@ -230,6 +230,89 @@ docker run -p 3000:3000 \
   multi-ai-chat
 ```
 
+### Google Cloud Platform
+
+The application includes Docker and Cloud Build configurations for easy GCP deployment.
+
+#### Option 1: Cloud Run (Serverless)
+
+Cloud Run is recommended for auto-scaling and pay-per-use pricing.
+
+```bash
+# Set your project
+export PROJECT_ID="your-project-id"
+gcloud config set project $PROJECT_ID
+
+# Enable required APIs
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
+
+# Create secrets for AWS credentials
+echo -n "your-aws-access-key" | gcloud secrets create aws-access-key-id --data-file=-
+echo -n "your-aws-secret-key" | gcloud secrets create aws-secret-access-key --data-file=-
+
+# Deploy from source
+gcloud run deploy bedrock-next-app \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars AWS_REGION=us-east-1 \
+  --set-secrets AWS_ACCESS_KEY_ID=aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=aws-secret-access-key:latest
+```
+
+#### Option 2: Cloud Build (CI/CD)
+
+The included `cloudbuild.yaml` enables automated deployments:
+
+```bash
+# One-time deployment
+gcloud builds submit --config cloudbuild.yaml
+
+# Set up automated builds from GitHub
+gcloud builds triggers create github \
+  --repo-name=amazon-bedrock \
+  --repo-owner=patriotnewsactivism \
+  --branch-pattern="^main$" \
+  --build-config=cloudbuild.yaml
+```
+
+#### Option 3: GKE (Kubernetes)
+
+For complex orchestration requirements:
+
+```bash
+# Create cluster
+gcloud container clusters create bedrock-cluster --region us-central1 --num-nodes 3
+
+# Build and push image
+docker build -t gcr.io/$PROJECT_ID/bedrock-next-app:latest .
+docker push gcr.io/$PROJECT_ID/bedrock-next-app:latest
+
+# Create secrets
+kubectl create secret generic aws-credentials \
+  --from-literal=AWS_ACCESS_KEY_ID='your-key' \
+  --from-literal=AWS_SECRET_ACCESS_KEY='your-secret' \
+  --from-literal=AWS_REGION='us-east-1'
+
+# Deploy (requires creating deployment.yaml)
+kubectl apply -f deployment.yaml
+```
+
+#### Local Docker Testing
+
+```bash
+# Build
+docker build -t bedrock-next-app .
+
+# Run locally
+docker run -p 3000:3000 \
+  -e AWS_REGION=us-east-1 \
+  -e AWS_ACCESS_KEY_ID=your-key \
+  -e AWS_SECRET_ACCESS_KEY=your-secret \
+  bedrock-next-app
+```
+
+See the included `Dockerfile`, `.dockerignore`, `.gcloudignore`, and `cloudbuild.yaml` for full configuration.
+
 ### Other Platforms
 
 The application can also be deployed to:
